@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pastillero · Horario de medicación imprimible</title>
+<meta name="description" content="Crea un horario de medicación claro e imprimible: qué pastilla tomar en cada momento del día. Gratis, en tu navegador. Ideal para mayores y cuidadores.">
+<style>
+  :root{--bg:#0e1420;--card:#18202f;--line:#2a3549;--txt:#eef2f8;--mut:#a6b3c8;--accent:#3b82f6}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--txt);line-height:1.55;font-size:18px}
+  .wrap{max-width:820px;margin:0 auto;padding:0 18px}
+  header{text-align:center;padding:26px 0 6px}
+  .logo{font-size:1.5rem;font-weight:800}.logo b{color:var(--accent)}
+  header p{color:var(--mut);margin:.3em 0 0}
+  .safe{background:#0f2033;border:1px solid #24507e;color:#bfdcff;border-radius:12px;padding:12px 14px;font-size:.9rem;margin:14px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin:14px 0}
+  label{display:block;font-weight:600;margin:6px 0 4px;font-size:.9rem}
+  input{width:100%;background:#0b1220;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:1rem}
+  .med{border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:10px;background:#0f1826}
+  .slots{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .slots label{display:flex;align-items:center;gap:6px;background:#0b1220;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;font-weight:500;margin:0}
+  .slots input{width:18px;height:18px;accent-color:var(--accent)}
+  .rm{background:#2a1418;border:1px solid #7c2d3a;color:#fca5a5;border-radius:8px;padding:6px 12px;cursor:pointer;margin-top:8px}
+  .btn{cursor:pointer;border:0;border-radius:12px;padding:13px 18px;font-size:1rem;font-weight:800;color:#fff;background:var(--accent);margin-top:12px;width:100%}
+  .btn.sec{background:#14243a;color:var(--txt);border:1px solid var(--line)}
+  /* Documento imprimible */
+  #doc{background:#fff;color:#111;border-radius:10px;padding:22px;margin-top:14px}
+  #doc h2{margin:0 0 12px}
+  #doc table{width:100%;border-collapse:collapse}
+  #doc th,#doc td{border:1px solid #bbb;padding:10px;text-align:left;vertical-align:top}
+  #doc th{background:#eef2f8;width:150px}
+  #doc .pill{display:inline-block;background:#eef;border:1px solid #ccd;border-radius:6px;padding:2px 8px;margin:2px 2px 0 0;font-size:.9rem}
+  footer{text-align:center;color:var(--mut);font-size:.82rem;padding:22px 0 40px;border-top:1px solid var(--line);margin-top:16px}
+  a{color:var(--accent)}
+  @media print{ .wrap>header,.safe,.card,footer,.noprint{display:none!important} #doc{margin:0} body{background:#fff} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">💊 <b>Pastillero</b></div>
+    <p>Un horario de medicación <strong>claro e imprimible</strong>. Para mayores y cuidadores.</p>
+  </header>
+
+  <div class="safe">ℹ️ Esto te ayuda a <strong>organizar</strong> las tomas, pero <strong>no es consejo médico</strong>. Sigue siempre las indicaciones de tu médico o farmacéutico, y no cambies dosis por tu cuenta.</div>
+
+  <div class="card">
+    <div id="meds"></div>
+    <button class="btn sec" id="add">+ Añadir medicamento</button>
+    <button class="btn" id="gen">Generar horario imprimible</button>
+    <button class="btn sec" id="print" style="display:none">🖨️ Imprimir / Guardar PDF</button>
+  </div>
+
+  <div id="doc" style="display:none"></div>
+
+  <footer>Hecho con ❤️ por <a href="https://dataflowelegance.es" target="_blank">DataFlow Elegance</a> · <a href="https://github.com/romebkkk/pastillero" target="_blank">GitHub</a></footer>
+</div>
+
+<script src="pastillero.js"></script>
+<script>
+  var $=function(s){return document.querySelector(s);};
+  var P=window.Pastillero;
+  var cont=$("#meds");
+
+  function addMed(m){
+    m=m||{nombre:"",dosis:"",slots:[]};
+    var el=document.createElement("div"); el.className="med";
+    el.innerHTML='<label>Medicamento</label><input class="n" type="text" placeholder="p. ej. Paracetamol" value="'+(m.nombre||"")+'">'+
+      '<label>Dosis</label><input class="d" type="text" placeholder="p. ej. 1 comprimido 500mg" value="'+(m.dosis||"")+'">'+
+      '<label>¿Cuándo?</label><div class="slots">'+P.SLOTS.map(function(s){return '<label><input type="checkbox" value="'+s+'"'+((m.slots||[]).indexOf(s)!==-1?" checked":"")+'>'+s+'</label>';}).join("")+'</div>'+
+      '<button class="rm">✕ Quitar</button>';
+    el.querySelector(".rm").onclick=function(){ el.remove(); save(); };
+    el.querySelectorAll("input").forEach(function(i){ i.addEventListener("input",save); });
+    cont.appendChild(el);
+  }
+  function leer(){
+    return [].slice.call(cont.querySelectorAll(".med")).map(function(el){
+      return { nombre: el.querySelector(".n").value.trim(), dosis: el.querySelector(".d").value.trim(),
+        slots: [].slice.call(el.querySelectorAll(".slots input:checked")).map(function(c){return c.value;}) };
+    });
+  }
+  function save(){ try{ localStorage.setItem("pastillero:meds", JSON.stringify(leer())); }catch(e){} }
+
+  var saved=[]; try{ saved=JSON.parse(localStorage.getItem("pastillero:meds")||"[]"); }catch(e){}
+  if(saved.length) saved.forEach(addMed); else addMed();
+
+  $("#add").onclick=function(){ addMed(); };
+  function esc(s){return (s||"").replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}
+
+  $("#gen").onclick=function(){
+    save();
+    var h=P.generarHorario(leer());
+    var rows=h.tabla.map(function(r){
+      var pills=r.meds.length? r.meds.map(function(m){return '<span class="pill">'+esc(m.nombre)+(m.dosis?" · "+esc(m.dosis):"")+'</span>';}).join(" ") : '<span style="color:#999">—</span>';
+      return '<tr><th>'+r.slot+'</th><td>'+pills+'</td></tr>';
+    }).join("");
+    $("#doc").innerHTML='<h2>💊 Mi horario de medicación</h2>'+
+      '<p style="color:#555;margin:0 0 12px">'+h.medicamentos+' medicamento(s) · '+h.tomas_dia+' tomas al día</p>'+
+      '<table><thead><tr><th>Momento</th><th>Qué tomar</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<p style="color:#777;font-size:.85rem;margin-top:12px">Orientativo. Sigue las indicaciones de tu médico/farmacéutico.</p>';
+    $("#doc").style.display="block"; $("#print").style.display="";
+    $("#doc").scrollIntoView({behavior:"smooth"});
+  };
+  $("#print").onclick=function(){ window.print(); };
+</script>
+</body>
+</html>
